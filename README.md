@@ -11,6 +11,22 @@ currently only supports Linux, as it uses the
 llmnrd will respond to name resolution queries sent by Windows clients in
 networks where no DNS server is available. It supports both IPv4 and IPv6.
 
+Packages (Schimmelreiter fork)
+==============================
+
+This fork adds packaging for the devices it is used on:
+
+| Platform | Where | Service |
+|---|---|---|
+| OpenWrt 25.12 / 24.10 | [openwrt-feed](https://github.com/Schimmelreiter/openwrt-feed) (`llmnrd`) | procd, UCI `/etc/config/llmnrd` |
+| Debian (amd64) | release `packages`: `llmnrd_*_amd64.deb` | systemd, `/etc/default/llmnrd` |
+| OpenATV / Enigma2 (`cortexa15hf-neon-vfpv4`, `mips32el`) | release `packages`: `llmnrd_*.ipk` | SysV init, `/etc/default/llmnrd` |
+
+Packages are built by [.github/workflows/packages.yml](.github/workflows/packages.yml);
+the receiver builds only need glibc 2.4 symbols. An OpenEmbedded recipe is in
+`contrib/openembedded/`. Note that wsdd2 also answers LLMNR (UDP 5355): run
+only one of both, or start wsdd2 with `-w`.
+
 Installation
 ============
 
