@@ -67,7 +67,7 @@ jobs:
         run: |
           make llmnrd llmnr-query GIT_VERSION= PIDFILE=/var/run/llmnrd.pid \
             CC="python3 -m ziglang cc -target ${{ matrix.target }} -mcpu=${{ matrix.cpu }}" \
-            CFLAGS="-O2" LDFLAGS="-s"
+            CFLAGS="-O2" LDFLAGS="-O2 -s"
           file llmnrd
           echo "glibc symbol versions:"
           objdump -T llmnrd llmnr-query | grep -o 'GLIBC_[0-9.]*' | sort -uV | tee glibc.txt
