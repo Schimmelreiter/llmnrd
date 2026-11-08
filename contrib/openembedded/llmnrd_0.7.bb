@@ -7,7 +7,7 @@ LICENSE = "GPL-2.0-only"
 LIC_FILES_CHKSUM = "file://COPYING;md5=05a4c5604b9126dcb84dcc6f1a84a7bb"
 
 SRC_URI = "git://github.com/Schimmelreiter/llmnrd.git;protocol=https;branch=master"
-SRCREV = "94d0db6d40814645f1eca64ae8473b80a82905aa"
+SRCREV = "f662f9d7eafb5a2d4a6bc3a212703c56c8e054cb"
 PV = "0.7+git"
 
 # OE 5.1 and newer (UNPACKDIR, like oe-alliance 6.0); older releases: ${WORKDIR}/git
