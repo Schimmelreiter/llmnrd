@@ -1,0 +1,117 @@
+# Builds llmnrd packages for Debian (amd64) and OpenATV/Enigma2
+# (cortexa15hf-neon-vfpv4, mips32el). OpenWrt packages are built in
+# https://github.com/Schimmelreiter/openwrt-feed.
+#
+# Results: release "packages" (rolling) and branch "packages".
+name: Packages
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  VERSION: '0.7'
+  # glibc of the receiver images: binaries must not need newer symbols
+  ZIG_VERSION: 0.13.0
+
+jobs:
+  debian:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          apt-get -qq update && apt-get -qq install -y build-essential dpkg-dev >/dev/null
+          make llmnrd llmnr-query GIT_VERSION= CFLAGS="-O2 -g0" LDFLAGS="-s"
+      - name: Package
+        run: |
+          r=pkgroot
+          install -D -m 0755 llmnrd $r/usr/sbin/llmnrd
+          install -D -m 0755 llmnr-query $r/usr/bin/llmnr-query
+          install -D -m 0644 doc/llmnrd.8 $r/usr/share/man/man8/llmnrd.8
+          install -D -m 0644 doc/llmnr-query.1 $r/usr/share/man/man1/llmnr-query.1
+          gzip -9n $r/usr/share/man/man8/llmnrd.8 $r/usr/share/man/man1/llmnr-query.1
+          install -D -m 0644 packaging/debian/llmnrd.service $r/usr/lib/systemd/system/llmnrd.service
+          install -D -m 0644 packaging/debian/llmnrd.default $r/etc/default/llmnrd
+          install -D -m 0644 README.md $r/usr/share/doc/llmnrd/README.md
+          sh tools/mkpkg.sh deb llmnrd "$VERSION-$GITHUB_RUN_NUMBER" amd64 $r dist \
+            "Link-Local Multicast Name Resolution (LLMNR) daemon" \
+            -d "libc6 (>= 2.17)" -s packaging/debian/scripts -c /etc/default/llmnrd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-debian
+          path: dist/
+
+  openatv:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: cortexa15hf-neon-vfpv4
+            target: arm-linux-gnueabihf.2.24
+            cpu: cortex_a15
+          - arch: mips32el
+            target: mipsel-linux-gnueabihf.2.24
+            cpu: mips32
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install zig
+        run: python3 -m pip install --quiet --break-system-packages ziglang==$ZIG_VERSION
+      - name: Build
+        run: |
+          make llmnrd llmnr-query GIT_VERSION= PIDFILE=/var/run/llmnrd.pid \
+            CC="python3 -m ziglang cc -target ${{ matrix.target }} -mcpu=${{ matrix.cpu }}" \
+            CFLAGS="-O2" LDFLAGS="-s"
+          file llmnrd
+          echo "glibc symbol versions:"
+          objdump -T llmnrd llmnr-query | grep -o 'GLIBC_[0-9.]*' | sort -uV | tee glibc.txt
+          max=$(tail -n 1 glibc.txt | sed 's/GLIBC_//')
+          # must run on glibc 2.24 and newer (OpenATV 6.x)
+          [ "$(printf '%s\n2.24\n' "$max" | sort -V | tail -n 1)" = 2.24 ]
+      - name: Package
+        run: |
+          r=pkgroot
+          install -D -m 0755 llmnrd $r/usr/sbin/llmnrd
+          install -D -m 0755 llmnr-query $r/usr/bin/llmnr-query
+          install -D -m 0755 packaging/sysv/llmnrd.init $r/etc/init.d/llmnrd
+          install -D -m 0644 packaging/sysv/llmnrd.default $r/etc/default/llmnrd
+          sh tools/mkpkg.sh ipk llmnrd "$VERSION-r$GITHUB_RUN_NUMBER" ${{ matrix.arch }} $r dist \
+            "Link-Local Multicast Name Resolution (LLMNR) daemon" \
+            -d "libc6" -s packaging/sysv/scripts -c /etc/default/llmnrd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-openatv-${{ matrix.arch }}
+          path: dist/
+
+  publish:
+    needs: [debian, openatv]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release "packages" (rolling)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la dist
+          gh release delete packages --yes --cleanup-tag -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh release create packages dist/* -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Packages (Debian, OpenATV)" \
+            --notes "Built from $GITHUB_SHA. Debian: \`apt install ./llmnrd_*_amd64.deb\`. OpenATV: \`opkg install /tmp/llmnrd_*_<arch>.ipk\`. OpenWrt: see Schimmelreiter/openwrt-feed."
+      - name: Branch "packages"
+        run: |
+          mkdir pub && cp dist/* pub/ && cd pub
+          git init -q -b packages
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A && git commit -qm "Packages from ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}" packages

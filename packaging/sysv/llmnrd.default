@@ -1,0 +1,4 @@
+# Options for llmnrd (see "llmnrd --help" and "man llmnrd").
+# -6 = also answer over IPv6, -i <dev> = only on this interface,
+# -H <name> = answer for this name instead of the host name.
+LLMNRD_OPTS="-6"
