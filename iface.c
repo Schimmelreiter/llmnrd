@@ -102,7 +102,8 @@ static bool iface_record_addr_eq(const struct sockaddr_storage *addr1,
 	}
 }
 
-static void iface_record_addr_add(struct iface_record *rec, struct sockaddr_storage *addr)
+/* Returns 1 if the address was added, 0 if it was already in the record. */
+static int iface_record_addr_add(struct iface_record *rec, struct sockaddr_storage *addr)
 {
 	size_t i;
 	struct sockaddr_storage *addrs = rec->addrs;
@@ -110,13 +111,14 @@ static void iface_record_addr_add(struct iface_record *rec, struct sockaddr_stor
 	for (i = 0; i < rec->size; i++) {
 		/* Address already in record? */
 		if (iface_record_addr_eq(&addrs[i], addr))
-			return;
+			return 0;
 	}
 
 	addrs = xrealloc(rec->addrs, (rec->size + 1) * sizeof(*addr));
 	memcpy(&addrs[rec->size], addr, sizeof(*addr));
 	rec->addrs = addrs;
 	rec->size++;
+	return 1;
 }
 
 static void iface_record_addr_del(struct iface_record *rec, struct sockaddr_storage *addr)
@@ -166,7 +168,7 @@ static inline void fill_sockaddr_storage(struct sockaddr_storage *sst,
 	}
 }
 
-static void iface_addr_add(unsigned int index, unsigned char family, const void *addr)
+static int iface_addr_add(unsigned int index, unsigned char family, const void *addr)
 {
 	struct iface_record *rec;
 	struct sockaddr_storage sst;
@@ -183,7 +185,7 @@ static void iface_addr_add(unsigned int index, unsigned char family, const void 
 
 	list_add_tail(&rec->list, &iface_list_head);
 add:
-	iface_record_addr_add(rec, &sst);
+	return iface_record_addr_add(rec, &sst);
 }
 
 static void iface_addr_del(unsigned int index, unsigned char family, const void *addr)
@@ -240,7 +242,13 @@ static void iface_nlmsg_change_addr(const struct nlmsghdr *nlh)
 			strncpy(addr, "<unknown>", sizeof(addr) - 1);
 
 		if (nlh->nlmsg_type == RTM_NEWADDR) {
-			iface_addr_add(index, family, RTA_DATA(rta));
+			/*
+			 * The kernel sends RTM_NEWADDR again whenever the
+			 * lifetimes of an address are refreshed (e.g. on every
+			 * Router Advertisement). Only report new addresses.
+			 */
+			if (!iface_addr_add(index, family, RTA_DATA(rta)))
+				continue;
 			type = IFACE_ADD;
 		} else if (nlh->nlmsg_type == RTM_DELADDR) {
 			iface_addr_del(index, family, RTA_DATA(rta));
