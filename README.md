@@ -19,7 +19,6 @@ This fork adds packaging for the devices it is used on:
 | Platform | Where | Service |
 |---|---|---|
 | OpenWrt 25.12 / 24.10 | [openwrt-feed](https://github.com/Schimmelreiter/openwrt-feed) (`llmnrd`) | procd, UCI `/etc/config/llmnrd` |
-| Debian (amd64) | release `packages`: `llmnrd_*_amd64.deb` | systemd, `/etc/default/llmnrd` |
 | OpenATV / Enigma2 (`cortexa15hf-neon-vfpv4`, `mips32el`) | release `packages`: `llmnrd_*.ipk` | SysV init, `/etc/default/llmnrd` |
 
 Packages are built by [.github/workflows/packages.yml](.github/workflows/packages.yml);

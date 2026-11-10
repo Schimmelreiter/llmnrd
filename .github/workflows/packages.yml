@@ -1,5 +1,6 @@
-# Builds llmnrd packages for Debian (amd64) and OpenATV/Enigma2
-# (cortexa15hf-neon-vfpv4, mips32el). OpenWrt packages are built in
+# Builds llmnrd packages for OpenATV/Enigma2 (cortexa15hf-neon-vfpv4,
+# mips32el). No Debian package: Debian has its own llmnrd, and wsdd2 or
+# systemd-resolved usually answer LLMNR there already. OpenWrt packages are built in
 # https://github.com/Schimmelreiter/openwrt-feed.
 #
 # Results: release "packages" (rolling) and branch "packages".
@@ -20,34 +21,6 @@ env:
   ZIG_VERSION: 0.14.1
 
 jobs:
-  debian:
-    runs-on: ubuntu-latest
-    container: debian:trixie
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        run: |
-          apt-get -qq update && apt-get -qq install -y build-essential dpkg-dev >/dev/null
-          make llmnrd llmnr-query GIT_VERSION= CFLAGS="-O2 -g0" LDFLAGS="-s"
-      - name: Package
-        run: |
-          r=pkgroot
-          install -D -m 0755 llmnrd $r/usr/sbin/llmnrd
-          install -D -m 0755 llmnr-query $r/usr/bin/llmnr-query
-          install -D -m 0644 doc/llmnrd.8 $r/usr/share/man/man8/llmnrd.8
-          install -D -m 0644 doc/llmnr-query.1 $r/usr/share/man/man1/llmnr-query.1
-          gzip -9n $r/usr/share/man/man8/llmnrd.8 $r/usr/share/man/man1/llmnr-query.1
-          install -D -m 0644 packaging/debian/llmnrd.service $r/usr/lib/systemd/system/llmnrd.service
-          install -D -m 0644 packaging/debian/llmnrd.default $r/etc/default/llmnrd
-          install -D -m 0644 README.md $r/usr/share/doc/llmnrd/README.md
-          sh tools/mkpkg.sh deb llmnrd "$VERSION-$GITHUB_RUN_NUMBER" amd64 $r dist \
-            "Link-Local Multicast Name Resolution (LLMNR) daemon" \
-            -d "libc6 (>= 2.17)" -s packaging/debian/scripts -c /etc/default/llmnrd
-      - uses: actions/upload-artifact@v4
-        with:
-          name: pkg-debian
-          path: dist/
-
   openatv:
     runs-on: ubuntu-latest
     strategy:
@@ -103,7 +76,7 @@ jobs:
           path: dist/
 
   publish:
-    needs: [debian, openatv]
+    needs: [openatv]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -118,8 +91,8 @@ jobs:
           ls -la dist
           gh release delete packages --yes --cleanup-tag -R "$GITHUB_REPOSITORY" 2>/dev/null || true
           gh release create packages dist/* -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "Packages (Debian, OpenATV)" \
-            --notes "Built from $GITHUB_SHA. Debian: \`apt install ./llmnrd_*_amd64.deb\`. OpenATV: \`opkg install /tmp/llmnrd_*_<arch>.ipk\`. OpenWrt: see Schimmelreiter/openwrt-feed."
+            --title "Packages (OpenATV)" \
+            --notes "Built from $GITHUB_SHA. OpenATV: \`opkg install /tmp/llmnrd_*_<arch>.ipk\`. OpenWrt: see Schimmelreiter/openwrt-feed."
       - name: Branch "packages"
         run: |
           mkdir pub && cp dist/* pub/ && cd pub
